@@ -1,0 +1,171 @@
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: bcoturn-ns
+  labels:
+    name: bcoturn-ns
+---
+apiVersion: v1
+data:
+  turnserver.conf: |
+    no-tcp-relay
+
+    denied-peer-ip=10.0.0.0-10.255.255.255
+    denied-peer-ip=192.168.0.0-192.168.255.255
+    denied-peer-ip=172.16.0.0-172.31.255.255
+
+    allowed-peer-ip=$INTERNAL_IP
+
+    user-quota=12
+    total-quota=1200
+kind: ConfigMap
+metadata:
+  labels:
+    app: bcoturn
+  name: bcoturn-config
+  namespace: bcoturn-ns
+---
+apiVersion: v1
+data:
+  # Replace this with your own secret, `pwgen -s 64 1 | base64 -w0` helps
+  auth-secret: TVcxNmpKZHZOWm1SUmpneGNDdm0yWGxCRnFqMXc1ZVBXR1VpRjRGNzdFbVBqMnZGU2dZbXpBd0lrejNhdEN4ZAo=
+kind: Secret
+metadata:
+  labels:
+    app: bcoturn
+  name: bcoturn-secret
+  namespace: bcoturn-ns
+type: Opaque
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: bcoturn
+  name: bcoturn
+  namespace: bcoturn-ns
+spec:
+  ports:
+  # You can't currently have both UDP and TCP in the same LoadBalancer on K8s,
+  # so if you need both you'll have to have two LoadBalancer services.
+  - name: udp-port
+    port: 3487
+    protocol: UDP
+    targetPort: 3487
+  selector:
+    app: bcoturn
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bcoturn
+  name: bcoturn
+  namespace: bcoturn-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bcoturn
+  template:
+    metadata:
+      labels:
+        app: bcoturn
+    spec:
+      containers:
+
+      - env:
+        - name: INTERNAL_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+        - name: EXTERNAL_IP
+          value: 157.245.24.167  # XXX: Replace this with your service IP
+        - name: AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: auth-secret
+              name: bcoturn-secret
+        - name: PORT
+          value: "3487"
+        - name: REALM
+          value: turn.dtpnk.tech
+        image: docker.pkg.github.com/b-galactic/bcoturn/bcoturn:latest
+        name: bcoturn
+        readinessProbe:
+          tcpSocket:
+            port: 9090
+        volumeMounts:
+        - mountPath: /etc/bcoturn/turnserver.conf
+          name: bcoturn-config
+          subPath: turnserver.conf
+      imagePullSecrets:
+      - name: gh-docker-reg-cred
+      restartPolicy: Always
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: bcoturn-config
+        name: bcoturn-config
+
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: test-deployment
+#   labels:
+#     app: test
+#   namespace: bcoturn-ns
+# spec:
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: test
+#   template:
+#     metadata:
+#       labels:
+#         app: test
+#     spec:
+#       containers:
+#       - name: test
+#         image: docker.pkg.github.com/b-galactic/bcoturn/bcoturn:latest
+#         ports:
+#         - containerPort: 80
+#       imagePullSecrets:
+#       - name: gh-docker-reg-cred
+
+
+# ---
+# apiVersion: networking.k8s.io/v1beta1
+# kind: Ingress
+# metadata:
+#   name: bcoturn-ingress
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     cert-manager.io/cluster-issuer: letsencrypt-prod
+#     certmanager.k8s.io/issuer: "letsencrypt-prod"
+#     certmanager.k8s.io/acme-challenge-type: http01
+# spec:
+#   tls:
+#   - hosts:
+#     - "turn.dtpnk.tech"
+#     secretName: bcoturn-tls
+#   rules:
+#   - host: "turn.dtpnk.tech"
+#     http:
+#       paths:
+#       - backend:
+#           serviceName: bcoturn
+#           servicePort: 3487
+
+# ---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: tcp-services
+#   namespace: default
+# data:
+#   3487: "bcoturn-ns/bcoturn:3487"

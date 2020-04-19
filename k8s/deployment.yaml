@@ -1,0 +1,54 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: bcoturn
+  name: bcoturn
+  namespace: bcoturn-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bcoturn
+  template:
+    metadata:
+      labels:
+        app: bcoturn
+    spec:
+      containers:
+
+      - env:
+        - name: INTERNAL_IP
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: status.hostIP
+        - name: EXTERNAL_IP
+          value: 157.245.24.167  # XXX: Replace this with your service IP
+        - name: AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: auth-secret
+              name: bcoturn-secret
+        - name: PORT
+          value: "3487"
+        - name: REALM
+          value: turn.dtpnk.tech
+        image: docker.pkg.github.com/b-galactic/bcoturn/bcoturn:latest
+        name: bcoturn
+        readinessProbe:
+          tcpSocket:
+            port: 9090
+        volumeMounts:
+        - mountPath: /etc/bcoturn/turnserver.conf
+          name: bcoturn-config
+          subPath: turnserver.conf
+      imagePullSecrets:
+      - name: gh-docker-reg-cred
+      restartPolicy: Always
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: bcoturn-config
+        name: bcoturn-config

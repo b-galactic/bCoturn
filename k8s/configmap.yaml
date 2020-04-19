@@ -1,0 +1,20 @@
+---
+apiVersion: v1
+kind: ConfigMap
+data:
+  turnserver.conf: |
+    no-tcp-relay
+
+    denied-peer-ip=10.0.0.0-10.255.255.255
+    denied-peer-ip=192.168.0.0-192.168.255.255
+    denied-peer-ip=172.16.0.0-172.31.255.255
+
+    allowed-peer-ip=$INTERNAL_IP
+
+    user-quota=12
+    total-quota=1200
+metadata:
+  labels:
+    app: bcoturn
+  name: bcoturn-config
+  namespace: bcoturn-ns

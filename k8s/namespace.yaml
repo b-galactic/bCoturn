@@ -1,0 +1,7 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bcoturn-ns
+  labels:
+    name: bcoturn-ns
